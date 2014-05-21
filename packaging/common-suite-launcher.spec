@@ -24,9 +24,8 @@ cp %{SOURCE1001} .
 
 
 %install
-mkdir -p %{buildroot}/%{_bindir}
-cp src/%{name} %{buildroot}/%{_bindir}
-chmod +x %{buildroot}/%{_bindir}/%{name}
+install -d %{buildroot}/%{_bindir}
+install -m 0755 src/%{name} %{buildroot}/%{_bindir}
 
 
 %files

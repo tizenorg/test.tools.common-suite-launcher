@@ -1,0 +1,139 @@
+#!/bin/bash
+
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+#
+# Authors: Nicolas Zingilé <nicolas.zingile@open.eurogiciel.org>
+
+set -e
+
+script=$(basename $0)
+
+function error() {
+	echo ERROR: "$@" >&2
+	cat << EOF >&2
+Usage: 
+	$script list
+	$script launch <suite> [<outdir>]
+	
+	list   : list available suites
+	launch : launch a suite
+	  |_ suite  - suite to launch 
+	  |_ outdir - result directory (default : /tmp). Result files are testkit.result.xml and testkit.result.txt
+EOF
+	exit 1
+}
+
+function list_suites() {
+	echo "### Available common suites :"
+	for suite in /usr/share/tests/*
+	do
+		if [[ $(basename $suite) == common-*-suite ]]; then
+			echo $(basename $suite)
+		fi
+	done
+}
+
+function format_results() {
+	local outdir=""
+	echo "#### Generating test results in txt format"
+	if [[ -z $1 ]]; then
+		outdir=/tmp
+	else
+		outdir=$1
+		cp /tmp/testkit.result.xml $outdir
+	fi
+	
+	if [ -e $outdir/testkit.result.xml ]; then
+
+		starttime=$(xml sel -t -v //summary/start_at -n $outdir/testkit.result.xml)
+		stoptime=$(xml sel -t -v //summary/end_at -n $outdir/testkit.result.xml)
+		suitename=$(xml sel -t -v //suite/@name -n $outdir/testkit.result.xml)
+		totalcase=$(xml sel -t -v "count(//testcase)" -n $outdir/testkit.result.xml)
+		totalpass=$(xml sel -t -v "count(//testcase[@result='PASS'])" -n $outdir/testkit.result.xml)
+		totalfail=$(xml sel -t -v "count(//testcase[@result='FAIL'])" -n $outdir/testkit.result.xml)
+		sets=$(xml sel -t -v //set/@name -n $outdir/testkit.result.xml)
+		
+		cat << EOF >> $outdir/testkit.result.txt
+======================== Test Report =======================
+
+Start time  : $starttime
+End time    : $stoptime
+Suite name  : $suitename
+Total cases : $totalcase
+Pass cases  : $totalpass
+Fail cases  : $totalfail 
+EOF
+		for set_test in $sets
+		do
+    			cat << EOF >> $outdir/testkit.result.txt
+
+=== Set $set_test
+
+EOF
+
+			xml sel -t -m "//testcase[@component='$set_test']" -v "concat(@name,'#',@purpose,'#',@result)" -n $outdir/testkit.result.xml | grep -v '^$' |
+			
+			while read testcase 
+			do
+    				testid=$(echo $testcase | awk -F# '{print $1}')
+    				testdesc=$(echo $testcase | awk -F# '{print $2}')
+    				testresult=$(echo $testcase | awk -F# '{print $3}')
+
+    				cat << EOF >> $outdir/testkit.result.txt 
+test id  : $testid
+$testdesc
+result   : $testresult
+
+EOF
+
+			done
+		done
+
+		echo "Test results are available in $outdir"
+		
+	else 
+		echo "Cannot generate test results in other format. No testkit.result.xml file"
+	fi
+	
+}
+
+function launch_suite() {
+	if [ -d /usr/share/tests/$1 ]; then
+		if [ -x /usr/share/tests/$1/runtest.sh ]; then
+			echo "#### Launching suite $1"
+			/usr/share/tests/$1/runtest.sh
+			format_results $2
+		else 
+			echo "Suite is corrupted ! cannot find runtest.sh script"
+		fi
+	else 
+		echo "Cannot launch the suite $1. Suite directory doesn't exist"
+		error
+	fi
+}
+
+case $1 in
+	list)
+		list_suites
+		;;
+	launch)
+		[ -z $2 ] && error "No suite defined !"
+		[ ! -d $3 ] && error "Result directory doesn't exist. Please create it first !"
+		
+		launch_suite $2 $3
+		;;
+	*)
+		error "Command line doesn't have any option"
+esac

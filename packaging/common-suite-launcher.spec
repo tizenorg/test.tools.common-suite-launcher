@@ -4,7 +4,7 @@ Release:	0
 License:	GPL-2.0
 Summary:	Launcher of Tizen Common test suites
 Group:		Development/Testing
-Source:		%{name}-%{version}-%{release}.tar.gz
+Source:		%{name}-%{version}.tar.gz
 Source1001:	%{name}.manifest
 Requires:	xmlstarlet
 BuildArch:	noarch

@@ -63,9 +63,10 @@ function format_results() {
 		totalcase=$(xml sel -t -v "count(//testcase)" -n $outdir/testkit.result.xml)
 		totalpass=$(xml sel -t -v "count(//testcase[@result='PASS'])" -n $outdir/testkit.result.xml)
 		totalfail=$(xml sel -t -v "count(//testcase[@result='FAIL'])" -n $outdir/testkit.result.xml)
+		totalna=$(xml sel -t -v "count(//testcase[@result='N/A'])" -n $outdir/testkit.result.xml)
 		sets=$(xml sel -t -v //set/@name -n $outdir/testkit.result.xml)
 		
-		cat << EOF >> $outdir/testkit.result.txt
+		cat << EOF > $outdir/testkit.result.txt
 ======================== Test Report =======================
 
 Start time  : $starttime
@@ -74,32 +75,26 @@ Suite name  : $suitename
 Total cases : $totalcase
 Pass cases  : $totalpass
 Fail cases  : $totalfail 
+N/A cases   : $totalna
 EOF
 		for set_test in $sets
 		do
-    			cat << EOF >> $outdir/testkit.result.txt
+			cat << EOF
 
 === Set $set_test
 
 EOF
 
-			xml sel -t -m "//testcase[@component='$set_test']" -v "concat(@name,'#',@purpose,'#',@result)" -n $outdir/testkit.result.xml | grep -v '^$' |
-			
-			while read testcase 
-			do
-    				testid=$(echo $testcase | awk -F# '{print $1}')
-    				testdesc=$(echo $testcase | awk -F# '{print $2}')
-    				testresult=$(echo $testcase | awk -F# '{print $3}')
-
-    				cat << EOF >> $outdir/testkit.result.txt 
-test id  : $testid
-$testdesc
-result   : $testresult
-
-EOF
-
-			done
-		done
+			xml sel -t -m "//testcase[@component='$set_test']" -v "concat(@name,'#',@purpose,'#',@result,'#',result_info/stdout)" -n $outdir/testkit.result.xml |
+			awk "-F#" 'NF>=4{
+				o=""; for (i=4 ; i<=NF ; i=i+1) o = (o ? o" " : "") $i
+				printf "test id  : %s\n", $1
+				printf "%s\n", $2
+				printf "result   : %s\n", $3
+				printf "stdout   : %s\n", o
+				printf "\n"
+			}'
+		done | sed 's:\\n:\n:g' >> $outdir/testkit.result.txt
 
 		echo "Test results are available in $outdir"
 		

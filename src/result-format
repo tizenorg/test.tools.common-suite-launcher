@@ -1,0 +1,135 @@
+#!/usr/bin/python
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+#
+# Authors: Nicolas Zingile <nicolas.zingile@open.eurogiciel.org>
+
+import io
+import os
+import argparse
+import sys
+from lxml import etree
+
+def printsatats(xmltree, suitename="", setname=""):
+    """Get some data information on a testkit result xml tree
+
+    Get the total number, the pass, the failed and the N/A test
+    cases.
+    If suitename is not defined, information are retrieved in the
+    whole document.
+    If suitename is defined, information are retrieved in the
+    given suite.
+    If both suitename and setname are defined, information are
+    retrieved in the set of the suite which have been entered
+
+    Args:
+	xmltree: testkit result xml tree to analyse
+	suitename: name of the suite to analyse
+	setname: name of the set to analyse
+
+    Returns:
+	A string with the information
+    """
+    stringbuf = ""
+    xpathtotal = ""
+    xpathpass = ""
+    xpathfail = ""
+    xpathna = ""
+
+    if not suitename:
+	xpathtotal = "count(//suite/set/testcase"
+    else:
+	if not setname:
+	    xpathtotal = "count(//suite[@name='" + suitename + "']/set/testcase"
+	else:
+	    xpathtotal = "count(//suite[@name='" + suitename + "']/set[@name='" + setname + "']/testcase"
+
+    xpathpass = xpathtotal + "[@result='PASS'])"
+    xpathfail = xpathtotal + "[@result='FAIL'])"
+    xpathna = xpathtotal + "[@result='N/A'])"
+    xpathtotal += ")"
+    stringbuf += "\nTotal cases : " + str(int((xmltree.xpath(xpathtotal))))
+    stringbuf += "\nPass cases  : " + str(int((xmltree.xpath(xpathpass))))
+    stringbuf += "\nFail cases  : " + str(int((xmltree.xpath(xpathfail))))
+    stringbuf += "\nN/A cases   : " + str(int((xmltree.xpath(xpathna))))
+
+    return stringbuf
+
+def format_result(resultxml, outputdir):
+    """ Format a testkit xml result file in a testkit txt result file
+
+    Creates a testkit txt result file in outputdir with resultxml
+
+    Args:
+	resultxml: path of the testkit xml result file
+	outputdir: folder for the future testkit resuklt txt file
+
+    Returns:
+    """
+    if not os.path.exists(resultxml) or not os.path.isfile(resultxml):
+	print "Error : Testkit result file doesn't exist !"
+	exit(1)
+    else:
+	resultname = os.path.basename(os.path.splitext(resultxml)[0] + '.txt')
+
+    if not os.path.isdir(outputdir):
+	print "Error : Output directory doesn't exist. You should create it first"
+	exit(1)
+    else:
+	resultpath = os.path.join(outputdir, resultname)
+	if os.path.exists(resultpath):
+	    os.remove(resultpath)
+
+    parser = etree.XMLParser(strip_cdata=False)
+
+    try:
+	xmldoc = etree.parse(resultxml, parser)
+    except etree.XMLSyntaxError:
+	print "Error : testkit xml file is not well formed !"
+	exit(1)
+
+    filedesc = open(resultpath, 'w+')
+    filedesc.write('======================== Test Report =======================\n')
+    filedesc.write(printsatats(xmldoc))
+
+    suiteiter = xmldoc.iter('suite')
+
+    for asuite in suiteiter:
+	suitename = asuite.get('name')
+	filedesc.write('\n\n\n====== Suite : ' + suitename + ' ======\n')
+	filedesc.write(printsatats(xmldoc, suitename))
+	setiter = asuite.iter('set')
+	for aset in setiter:
+	    setname = aset.get('name')
+	    filedesc.write('\n\n=== Set : ' + setname + ' ===\n')
+	    filedesc.write(printsatats(xmldoc, suitename, setname))
+	    tcaseiter = aset.iter('testcase')
+	    for atcase in tcaseiter:
+		filedesc.write('\n\ntest id   : ' + atcase.get('id'))
+		filedesc.write('\nobjective : ' + atcase.get('purpose'))
+		filedesc.write('\nresult    : ' + atcase.get('result'))
+		filedesc.write('\nstdout    : ' + atcase.find('result_info/stdout').text.decode('string_escape'))
+		filedesc.write('stderr    : ' + atcase.find('result_info/stderr').text.decode('string_escape'))
+
+def main ():
+    parser = argparse.ArgumentParser(description='Tool to convert a testkit xml file in a txt format')
+    parser.add_argument('-f', '--file', required=True, help='testkit xml result file')
+    parser.add_argument('-o', '--outdir',  metavar='DIR', default='/tmp', help='output directory')
+    args = parser.parse_args()
+
+    format_result(args.file, args.outdir)
+
+if __name__=="__main__":
+    main()

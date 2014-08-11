@@ -1,5 +1,5 @@
-#!/bin/bash
-
+#!/usr/bin/python
+#
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
@@ -14,121 +14,214 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #
-# Authors: Nicolas Zingilé <nicolas.zingile@open.eurogiciel.org>
+# Authors: Nicolas Zingile <nicolas.zingile@open.eurogiciel.org>
 
-set -e
+import io
+import os
+import sys
+import argparse
+import shutil
+import subprocess
+import argparse
+from lxml import etree
 
-script=$(basename $0)
+#---- Global variables ----#
+XSDFILE = '/usr/share/testkit-lite/xsd/test_definition.xsd'
+GLOBALSUITEPATH = '/usr/share/tests/'
+KNOWNPROFILES = ['ivi', 'common']
 
-function error() {
-	echo ERROR: "$@" >&2
-	cat << EOF >&2
-Usage: 
-	$script list
-	$script launch <suite> [<outdir>]
-	
-	list   : list available suites
-	launch : launch a suite
-	  |_ suite  - suite to launch 
-	  |_ outdir - result directory (default : /tmp). Result files are testkit.result.xml and testkit.result.txt
-EOF
-	exit 1
-}
+#---- Helper functions of the launch_suites function ----#
+def check_runtest(suitedir):
+	""" Check if a test suite contains a valid runtest script
 
-function list_suites() {
-	echo "### Available common suites :"
-	for suite in /usr/share/tests/*
-	do
-		if [[ $(basename $suite) == common-*-suite ]]; then
-			echo $(basename $suite)
-		fi
-	done
-}
+	Check if suitedir contains a runtest script and
+	if this script is executable.
 
-function format_results() {
-	local outdir=""
-	echo "#### Generating test results in txt format"
-	if [[ -z $1 ]]; then
-		outdir=/tmp
-	else
-		outdir=$1
-		cp /tmp/testkit.result.xml $outdir
-	fi
-	
-	if [ -e $outdir/testkit.result.xml ]; then
+	Args:
+		suitedir: Directory of the suite to check
 
-		starttime=$(xml sel -t -v //summary/start_at -n $outdir/testkit.result.xml)
-		stoptime=$(xml sel -t -v //summary/end_at -n $outdir/testkit.result.xml)
-		suitename=$(xml sel -t -v //suite/@name -n $outdir/testkit.result.xml)
-		totalcase=$(xml sel -t -v "count(//testcase)" -n $outdir/testkit.result.xml)
-		totalpass=$(xml sel -t -v "count(//testcase[@result='PASS'])" -n $outdir/testkit.result.xml)
-		totalfail=$(xml sel -t -v "count(//testcase[@result='FAIL'])" -n $outdir/testkit.result.xml)
-		totalna=$(xml sel -t -v "count(//testcase[@result='N/A'])" -n $outdir/testkit.result.xml)
-		sets=$(xml sel -t -v //set/@name -n $outdir/testkit.result.xml)
-		
-		cat << EOF > $outdir/testkit.result.txt
-======================== Test Report =======================
+	Returns:
+		A boolean
+		True if a runtest script is present and executable
+		False if no runtest script or runtest script is not executable
+	"""
+	result = False
+	runtestfile = os.path.join(suitedir, 'runtest')
+	if os.path.isfile(runtestfile) and os.access(runtestfile, os.X_OK):
+		result = True
 
-Start time  : $starttime
-End time    : $stoptime
-Suite name  : $suitename
-Total cases : $totalcase
-Pass cases  : $totalpass
-Fail cases  : $totalfail 
-N/A cases   : $totalna
-EOF
-		for set_test in $sets
-		do
-			cat << EOF
+	return result
 
-=== Set $set_test
+def check_xmlfile(suitedir, testxml):
+	"""Check if a testkit xml file is well formed and valid
 
-EOF
+	Check if the syntax of testxml is in accordance with
+	the xml format. Then, check if testxml is in accordance
+	with the testkit lite schema definition.
+	Exits the program if testxml is not well formed.
 
-			xml sel -t -m "//testcase[@component='$set_test']" -v "concat(@name,'#',@purpose,'#',@result,'#',result_info/stdout)" -n $outdir/testkit.result.xml |
-			awk "-F#" 'NF>=4{
-				o=""; for (i=4 ; i<=NF ; i=i+1) o = (o ? o" " : "") $i
-				printf "test id  : %s\n", $1
-				printf "%s\n", $2
-				printf "result   : %s\n", $3
-				printf "stdout   : %s\n", o
-				printf "\n"
-			}'
-		done | sed 's:\\n:\n:g' >> $outdir/testkit.result.txt
+	Args:
+		suitedir: Directory of the suite
+		testxml: Testkit xml file to check
 
-		echo "Test results are available in $outdir"
-		
-	else 
-		echo "Cannot generate test results in other format. No testkit.result.xml file"
-	fi
-	
-}
+	Returns:
+		A boolean if the document is well formed.
+		True if testxml is valid
+		False if testxml is not valid
+	"""
+	xmlschema_doc = etree.parse(XSDFILE)
+	xmlschema = etree.XMLSchema(xmlschema_doc)
 
-function launch_suite() {
-	if [ -d /usr/share/tests/$1 ]; then
-		if [ -x /usr/share/tests/$1/runtest.sh ]; then
-			echo "#### Launching suite $1"
-			/usr/share/tests/$1/runtest.sh
-			format_results $2
-		else 
-			echo "Suite is corrupted ! cannot find runtest.sh script"
-		fi
-	else 
-		echo "Cannot launch the suite $1. Suite directory doesn't exist"
-		error
-	fi
-}
+	try:
+		xmlfile = etree.parse(os.path.join(suitedir,testxml))
+	except etree.XMLSyntaxError as e:
+		print '-- xml file ' + testxml + ' of ' + os.path.basename(suitedir) + ' is not well-formed !'
+		print 'Error : ' + str(e)
+		sys.exit(1)
 
-case $1 in
-	list)
-		list_suites
-		;;
-	launch)
-		[ -z $2 ] && error "No suite defined !"
-		[ ! -d $3 ] && error "Result directory doesn't exist. Please create it first !"
-		
-		launch_suite $2 $3
-		;;
-	*)
-		error "Command line doesn't have any option"
-esac
+	valid = xmlschema.validate(xmlfile)
+
+	return(valid, str(xmlschema.error_log))
+
+def get_xmlfiles(folder):
+	""" Retrieves all .xml files of a directory.
+
+	Get all the .xml files of folder. Sub folders
+	are not checked.
+
+	Args:
+		folder: directory to borowse
+
+	Returns:
+		A list of the xml files in folder
+	"""
+	xmlfiles = []
+	for afile in os.listdir(folder):
+		if afile.endswith('.xml'):
+			xmlfiles.append(afile)
+
+	return xmlfiles
+
+def print_output(process):
+	"""Print the output of a process in stdout
+
+	Args:
+		process: process for which to print the stdout
+
+	Returns:
+	"""
+	while True:
+		nextline = process.stdout.readline()
+		if nextline == '' and process.poll() != None:
+			break
+		sys.stdout.write(nextline)
+		sys.stdout.flush()
+
+	output = process.communicate()[0]
+	exitCode = process.returncode
+
+	if (exitCode == 0):
+		return output
+	else:
+		exit(1)
+
+#---- subcommand function ----#
+
+def list_suites(args):
+	profiles = []
+
+	print '#---------- Available test suites ----------#'
+	if args.profile == 'all':
+		try:
+			for profile in os.listdir(GLOBALSUITEPATH):
+				if not profile.startswith('.') and isinstance(KNOWNPROFILES.index(profile), int):
+					profiles.append(profile)
+		except OSError:
+			print '-'
+		except ValueError:
+			print 'Error : \'' + profile + '\' is not a supported Tizen profile !'
+	else:
+		profiles.append(args.profile)
+
+	for profile in profiles:
+		print '\n##-- List of ' + profile + ' test suites'
+		suitepath = os.path.join(GLOBALSUITEPATH, profile)
+		suitelist = os.listdir(suitepath)
+		try:
+			if not suitelist:
+				print '-'
+			else:
+				for suite in os.listdir(suitepath):
+					print suite
+		except OSError:
+			print '-'
+
+def launch_suites(args):
+
+	print '##-- Checking integrity of the test suites'
+	if len(args.suites) != len(set(args.suites)):
+		print '-- List of given test suites is invalid !'
+		print 'Error : the list of the test suites to launch should not contains duplicates !'
+		exit (1)
+	for suite in args.suites:
+		profile = suite.split('-', 2)[0]
+		suitepath = os.path.join(GLOBALSUITEPATH, profile, suite)
+		print suite
+		if not os.path.isdir(suitepath):
+			print '-- The test suite is invalid !'
+			print 'Error : the test suite \''+ os.path.basename(suitepath) + '\' doesn\'t exist.'
+			exit(1)
+		if check_runtest(suitepath):
+			print '-- runtest script of ' + suite + ' is present and executable. Ok'
+			testkitxmlfiles = get_xmlfiles(suitepath)
+			if not testkitxmlfiles:
+				print '-- No xml file found !'
+				print 'Error : there is no testkit xml file in the suite directory.'
+			for axmlfile in testkitxmlfiles:
+				result = check_xmlfile(suitepath, axmlfile)
+				if result[0]:
+					print '-- xml file ' + axmlfile + ' of ' + suite + ' is valid. Ok'
+				else:
+					print '-- xml file ' + axmlfile + ' of ' + suite + ' is invalid !'
+					print 'Error : ' + result[1]
+					exit(1)
+		else:
+			print '-- runtest script of ' + suite + ' is corrupted !'
+			print 'Error : \'runtest\' script is not present and/or is not executable'
+			sys.exit(1)
+
+		print '\n##-- Executing the suite : ' + suite + "\n"
+		finaloutdir = os.path.join(args.outdir, suite)
+		if not os.path.isdir(finaloutdir):
+			os.makedirs(finaloutdir, 0755)
+		else:
+			shutil.rmtree(finaloutdir)
+
+		process = subprocess.Popen([os.path.join(suitepath, 'runtest'), finaloutdir], cwd=suitepath, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		print_output(process)
+		for afile in os.listdir(finaloutdir):
+			if afile.endswith(".xml"):
+				cmd = "result-format -f " + os.path.join(finaloutdir, afile) + " -o " + finaloutdir
+				os.system(cmd)
+
+def main ():
+
+    parser = argparse.ArgumentParser(description='Tool to manage Tizen test suites')
+    subparser = parser.add_subparsers(dest='subcommand')
+    sp_list = subparser.add_parser('list', help='list available test suites')
+    sp_list.add_argument('--profile', help='list the available test suites of Tizen PROFILE', choices=['common', 'ivi', 'all'], default='all')
+    sp_launch = subparser.add_parser('launch', help='launch a test suites')
+    sp_launch.add_argument('--suites', help='test suite(s) to launch', required=True, nargs='+')
+    sp_launch.add_argument('--outdir', help='output directory for the results', default='/var/log/qa')
+
+    args = parser.parse_args()
+
+    if args.subcommand == 'list':
+		list_suites(args)
+    elif args.subcommand == 'launch':
+		launch_suites(args)
+    else:
+		parser.print_usage()
+
+if __name__ == "__main__":
+    main()

@@ -1,5 +1,5 @@
 Name:		common-suite-launcher
-Version:	1.0.0
+Version:	2.0.0
 Release:	0
 License:	GPL-2.0
 Summary:	Launcher of Tizen Common test suites
@@ -12,7 +12,8 @@ BuildArch:	noarch
 
 %description
 
-Common Suite Launcher is the Launcher of the test suites of the Tizen Common profile
+Common Suite Launcher is the launcher of the test suites that
+are packaged in Tizen.
 
 
 %prep
@@ -26,9 +27,11 @@ cp %{SOURCE1001} .
 %install
 install -d %{buildroot}/%{_bindir}
 install -m 0755 src/%{name} %{buildroot}/%{_bindir}
+install -m 0755 src/result-format %{buildroot}/%{_bindir}
 
 
 %files
 %manifest %{name}.manifest
 %defattr(-,root,root)
 %{_bindir}/common-suite-launcher
+%{_bindir}/result-format

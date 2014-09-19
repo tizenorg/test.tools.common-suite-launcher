@@ -16,13 +16,12 @@
 #
 # Authors: Nicolas Zingile <nicolas.zingile@open.eurogiciel.org>
 
+import argparse
 import io
 import os
-import sys
-import argparse
 import shutil
 import subprocess
-import argparse
+import sys
 from lxml import etree
 
 #---- Global variables ----#
@@ -32,177 +31,177 @@ KNOWNPROFILES = ['ivi', 'common']
 
 #---- Helper functions of the launch_suites function ----#
 def check_runtest(suitedir):
-	""" Check if a test suite contains a valid runtest script
+    """Check if a test suite contains a valid runtest script.
 
-	Check if suitedir contains a runtest script and
-	if this script is executable.
+    Check if suitedir contains a runtest script and
+    if this script is executable.
 
-	Args:
-		suitedir: Directory of the suite to check
+    Args:
+	suitedir: Directory of the suite to check
 
-	Returns:
-		A boolean
-		True if a runtest script is present and executable
-		False if no runtest script or runtest script is not executable
-	"""
-	result = False
-	runtestfile = os.path.join(suitedir, 'runtest')
-	if os.path.isfile(runtestfile) and os.access(runtestfile, os.X_OK):
-		result = True
+    Returns:
+	A boolean
+	True if a runtest script is present and executable
+	False if no runtest script or runtest script is not executable
+    """
+    result = False
+    runtestfile = os.path.join(suitedir, 'runtest')
+    if os.path.isfile(runtestfile) and os.access(runtestfile, os.X_OK):
+	result = True
 
-	return result
+    return result
 
 def check_xmlfile(suitedir, testxml):
-	"""Check if a testkit xml file is well formed and valid
+    """Check if a testkit xml file is well formed and valid.
 
-	Check if the syntax of testxml is in accordance with
-	the xml format. Then, check if testxml is in accordance
-	with the testkit lite schema definition.
-	Exits the program if testxml is not well formed.
+    Check if the syntax of testxml is in accordance with
+    the xml format. Then, check if testxml is in accordance
+    with the testkit lite schema definition.
+    Exits the program if testxml is not well formed.
 
-	Args:
-		suitedir: Directory of the suite
-		testxml: Testkit xml file to check
+    Args:
+	suitedir: Directory of the suite
+	testxml: Testkit xml file to check
 
-	Returns:
-		A boolean if the document is well formed.
-		True if testxml is valid
-		False if testxml is not valid
-	"""
-	xmlschema_doc = etree.parse(XSDFILE)
-	xmlschema = etree.XMLSchema(xmlschema_doc)
+    Returns:
+	A boolean if the document is well formed.
+	True if testxml is valid
+	False if testxml is not valid
+    """
+    xmlschema_doc = etree.parse(XSDFILE)
+    xmlschema = etree.XMLSchema(xmlschema_doc)
 
-	try:
-		xmlfile = etree.parse(os.path.join(suitedir,testxml))
-	except etree.XMLSyntaxError as e:
-		print '-- xml file ' + testxml + ' of ' + os.path.basename(suitedir) + ' is not well-formed !'
-		print 'Error : ' + str(e)
-		sys.exit(1)
+    try:
+	xmlfile = etree.parse(os.path.join(suitedir,testxml))
+    except etree.XMLSyntaxError as e:
+	print '-- xml file ' + testxml + ' of ' + os.path.basename(suitedir) + ' is not well-formed !'
+	print 'Error : ' + str(e)
+	sys.exit(1)
 
-	valid = xmlschema.validate(xmlfile)
+    valid = xmlschema.validate(xmlfile)
 
-	return(valid, str(xmlschema.error_log))
+    return(valid, str(xmlschema.error_log))
 
 def get_xmlfiles(folder):
-	""" Retrieves all .xml files of a directory.
+    """Retrieves all .xml files of a directory.
 
-	Get all the .xml files of folder. Sub folders
-	are not checked.
+    Get all the .xml files of folder. Sub folders
+    are not checked.
 
-	Args:
-		folder: directory to borowse
+    Args:
+	folder: directory to borowse
 
-	Returns:
-		A list of the xml files in folder
-	"""
-	xmlfiles = []
-	for afile in os.listdir(folder):
-		if afile.endswith('.xml'):
-			xmlfiles.append(afile)
+    Returns:
+	A list of the xml files in folder
+    """
+    xmlfiles = []
+    for afile in os.listdir(folder):
+	if afile.endswith('.xml'):
+	   xmlfiles.append(afile)
 
-	return xmlfiles
+    return xmlfiles
 
 def print_output(process):
-	"""Print the output of a process in stdout
+    """Print the output of a process in stdout.
 
-	Args:
-		process: process for which to print the stdout
+    Args:
+	process: process for which to print the stdout
 
-	Returns:
-	"""
-	while True:
-		nextline = process.stdout.readline()
-		if nextline == '' and process.poll() != None:
-			break
-		sys.stdout.write(nextline)
-		sys.stdout.flush()
+    Returns:
+    """
+    while True:
+	nextline = process.stdout.readline()
+	if nextline == '' and process.poll() != None:
+	    break
+	sys.stdout.write(nextline)
+	sys.stdout.flush()
 
-	output = process.communicate()[0]
-	exitCode = process.returncode
+    output = process.communicate()[0]
+    exitCode = process.returncode
 
-	if (exitCode == 0):
-		return output
-	else:
-		exit(1)
+    if (exitCode == 0):
+	return output
+    else:
+	exit(1)
 
 #---- subcommand function ----#
 
 def list_suites(args):
-	profiles = []
+    profiles = []
 
-	print '#---------- Available test suites ----------#'
-	if args.profile == 'all':
-		try:
-			for profile in os.listdir(GLOBALSUITEPATH):
-				if not profile.startswith('.') and isinstance(KNOWNPROFILES.index(profile), int):
-					profiles.append(profile)
-		except OSError:
-			print '-'
-		except ValueError:
-			print 'Error : \'' + profile + '\' is not a supported Tizen profile !'
-	else:
-		profiles.append(args.profile)
+    print '#---------- Available test suites ----------#'
+    if args.profile == 'all':
+	try:
+	    for profile in os.listdir(GLOBALSUITEPATH):
+		if not profile.startswith('.') and isinstance(KNOWNPROFILES.index(profile), int):
+		    profiles.append(profile)
+	except OSError:
+	    print '-'
+	except ValueError:
+	    print 'Error : \'' + profile + '\' is not a supported Tizen profile !'
+    else:
+	profiles.append(args.profile)
 
-	for profile in profiles:
-		print '\n##-- List of ' + profile + ' test suites'
-		suitepath = os.path.join(GLOBALSUITEPATH, profile)
-		suitelist = os.listdir(suitepath)
-		try:
-			if not suitelist:
-				print '-'
-			else:
-				for suite in os.listdir(suitepath):
-					print suite
-		except OSError:
-			print '-'
+    for profile in profiles:
+	print '\n##-- List of ' + profile + ' test suites'
+	suitepath = os.path.join(GLOBALSUITEPATH, profile)
+	suitelist = os.listdir(suitepath)
+	try:
+	    if not suitelist:
+		print '-'
+	    else:
+		for suite in os.listdir(suitepath):
+		    print suite
+	except OSError:
+	    print '-'
 
 def launch_suites(args):
 
-	print '##-- Checking integrity of the test suites'
-	if len(args.suites) != len(set(args.suites)):
-		print '-- List of given test suites is invalid !'
-		print 'Error : the list of the test suites to launch should not contains duplicates !'
-		exit (1)
-	for suite in args.suites:
-		profile = suite.split('-', 2)[0]
-		suitepath = os.path.join(GLOBALSUITEPATH, profile, suite)
-		print suite
-		if not os.path.isdir(suitepath):
-			print '-- The test suite is invalid !'
-			print 'Error : the test suite \''+ os.path.basename(suitepath) + '\' doesn\'t exist.'
-			exit(1)
-		if check_runtest(suitepath):
-			print '-- runtest script of ' + suite + ' is present and executable. Ok'
-			testkitxmlfiles = get_xmlfiles(suitepath)
-			if not testkitxmlfiles:
-				print '-- No xml file found !'
-				print 'Error : there is no testkit xml file in the suite directory.'
-			for axmlfile in testkitxmlfiles:
-				result = check_xmlfile(suitepath, axmlfile)
-				if result[0]:
-					print '-- xml file ' + axmlfile + ' of ' + suite + ' is valid. Ok'
-				else:
-					print '-- xml file ' + axmlfile + ' of ' + suite + ' is invalid !'
-					print 'Error : ' + result[1]
-					exit(1)
+    print '##-- Checking integrity of the test suites'
+    if len(args.suites) != len(set(args.suites)):
+	print '-- List of given test suites is invalid !'
+	print 'Error : the list of the test suites to launch should not contains duplicates !'
+	exit (1)
+    for suite in args.suites:
+	profile = suite.split('-', 2)[0]
+	suitepath = os.path.join(GLOBALSUITEPATH, profile, suite)
+	print suite
+	if not os.path.isdir(suitepath):
+	    print '-- The test suite is invalid !'
+	    print 'Error : the test suite \''+ os.path.basename(suitepath) + '\' doesn\'t exist.'
+	    exit(1)
+	if check_runtest(suitepath):
+	    print '-- runtest script of ' + suite + ' is present and executable. Ok'
+	    testkitxmlfiles = get_xmlfiles(suitepath)
+	    if not testkitxmlfiles:
+		print '-- No xml file found !'
+		print 'Error : there is no testkit xml file in the suite directory.'
+	    for axmlfile in testkitxmlfiles:
+	        result = check_xmlfile(suitepath, axmlfile)
+		if result[0]:
+		    print '-- xml file ' + axmlfile + ' of ' + suite + ' is valid. Ok'
 		else:
-			print '-- runtest script of ' + suite + ' is corrupted !'
-			print 'Error : \'runtest\' script is not present and/or is not executable'
-			sys.exit(1)
+		    print '-- xml file ' + axmlfile + ' of ' + suite + ' is invalid !'
+		    print 'Error : ' + result[1]
+		    exit(1)
+	else:
+	    print '-- runtest script of ' + suite + ' is corrupted !'
+	    print 'Error : \'runtest\' script is not present and/or is not executable'
+	    sys.exit(1)
 
-		print '\n##-- Executing the suite : ' + suite + "\n"
-		finaloutdir = os.path.join(args.outdir, suite)
-		if not os.path.isdir(finaloutdir):
-			os.makedirs(finaloutdir, 0755)
-		else:
-			shutil.rmtree(finaloutdir)
+	print '\n##-- Executing the suite : ' + suite + "\n"
+	finaloutdir = os.path.join(args.outdir, suite)
+	if not os.path.isdir(finaloutdir):
+	    os.makedirs(finaloutdir, 0755)
+	else:
+	    shutil.rmtree(finaloutdir)
 
-		process = subprocess.Popen([os.path.join(suitepath, 'runtest'), finaloutdir], cwd=suitepath, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-		print_output(process)
-		for afile in os.listdir(finaloutdir):
-			if afile.endswith(".xml"):
-				cmd = "result-format -f " + os.path.join(finaloutdir, afile) + " -o " + finaloutdir
-				os.system(cmd)
+	process = subprocess.Popen([os.path.join(suitepath, 'runtest'), finaloutdir], cwd=suitepath, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	print_output(process)
+	for afile in os.listdir(finaloutdir):
+	    if afile.endswith(".xml"):
+		format_cmd = ['result-format', '-f', os.path.join(finaloutdir, afile), '-o', finaloutdir]
+		subprocess.call(format_cmd)
 
 def main ():
 
@@ -217,11 +216,11 @@ def main ():
     args = parser.parse_args()
 
     if args.subcommand == 'list':
-		list_suites(args)
+	list_suites(args)
     elif args.subcommand == 'launch':
-		launch_suites(args)
+	launch_suites(args)
     else:
-		parser.print_usage()
+	parser.print_usage()
 
 if __name__ == "__main__":
     main()

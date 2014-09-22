@@ -28,6 +28,8 @@ from lxml import etree
 XSDFILE = '/usr/share/testkit-lite/xsd/test_definition.xsd'
 GLOBALSUITEPATH = '/usr/share/tests/'
 KNOWNPROFILES = ['ivi', 'common']
+RESXMLDIR = 'result'
+RESXMLNAME ='result.xml'
 
 #---- Helper functions of the launch_suites function ----#
 def check_runtest(suitedir):
@@ -124,6 +126,39 @@ def print_output(process):
     else:
 	exit(1)
 
+def format_resultfile(xmlfile, outdir):
+    """Transforms the testkit xml result file in a txt file.
+
+    The transformation is performed with the result-format tool.
+
+    Args:
+	xmlfile: xml file to transform.
+	outdir: output directory of the future txt result file.
+
+    Returns:
+    """
+    format_cmd = ['result-format', '-f', xmlfile, '-o', outdir]
+    subprocess.call(format_cmd)
+
+def merge_resultfile(xmlfile, outdir, name):
+    """Merges testkit-lite xml result files.
+
+    The merging is performed with the testkit-merge tool.
+
+    Args:
+	xmlfile: testkit-lit xml result files to merge.
+	outdir: Output directory.
+	name: Name of the xml result file that will be generated.
+
+    Returns:
+    """
+    resxmlpath = os.path.join(outdir, name)
+    if os.path.isfile(resxmlpath):
+	merge_cmd = ['testkit-merge', '-f', xmlfile, resxmlpath, '-o', outdir, '-n', name]
+    else:
+	merge_cmd = ['testkit-merge', '-f', xmlfile, '-o', outdir, '-n', name]
+    subprocess.call(merge_cmd)
+
 #---- subcommand function ----#
 
 def list_suites(args):
@@ -156,12 +191,17 @@ def list_suites(args):
 	    print '-'
 
 def launch_suites(args):
-
+    mergedir = os.path.join(args.outdir, RESXMLDIR)
+    resxmlpath = os.path.join(mergedir, RESXMLNAME)
     print '##-- Checking integrity of the test suites'
     if len(args.suites) != len(set(args.suites)):
 	print '-- List of given test suites is invalid !'
 	print 'Error : the list of the test suites to launch should not contains duplicates !'
 	exit (1)
+    ## remove and re-create final result directory
+    if os.path.isdir(mergedir):
+	shutil.rmtree(mergedir)
+    os.makedirs(mergedir, 0755)
     for suite in args.suites:
 	profile = suite.split('-', 2)[0]
 	suitepath = os.path.join(GLOBALSUITEPATH, profile, suite)
@@ -198,10 +238,11 @@ def launch_suites(args):
 
 	process = subprocess.Popen([os.path.join(suitepath, 'runtest'), finaloutdir], cwd=suitepath, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 	print_output(process)
-	for afile in os.listdir(finaloutdir):
-	    if afile.endswith(".xml"):
-		format_cmd = ['result-format', '-f', os.path.join(finaloutdir, afile), '-o', finaloutdir]
-		subprocess.call(format_cmd)
+	suiteresxmlfiles = get_xmlfiles(finaloutdir)
+	for asuiteresxmlfile in suiteresxmlfiles:
+	    suiteresxmlpath = os.path.join(finaloutdir, asuiteresxmlfile)
+	    merge_resultfile(suiteresxmlpath, mergedir, RESXMLNAME)
+	    format_resultfile(suiteresxmlpath, finaloutdir)
 
 def main ():
 
@@ -219,6 +260,9 @@ def main ():
 	list_suites(args)
     elif args.subcommand == 'launch':
 	launch_suites(args)
+	resxmlpath = os.path.join(args.outdir, RESXMLDIR, RESXMLNAME)
+	if os.path.isfile(resxmlpath):
+	    format_resultfile(resxmlpath, os.path.dirname(resxmlpath))
     else:
 	parser.print_usage()
 

@@ -1,5 +1,5 @@
 Name:		common-suite-launcher
-Version:	2.0.0
+Version:	2.1.0
 Release:	0
 License:	GPL-2.0
 Summary:	Launcher of Tizen Common test suites

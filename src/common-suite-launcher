@@ -180,8 +180,8 @@ def list_suites(args):
     for profile in profiles:
 	print '\n##-- List of ' + profile + ' test suites'
 	suitepath = os.path.join(GLOBALSUITEPATH, profile)
-	suitelist = os.listdir(suitepath)
 	try:
+	    suitelist = os.listdir(suitepath)
 	    if not suitelist:
 		print '-'
 	    else:

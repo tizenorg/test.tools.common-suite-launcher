@@ -42,11 +42,12 @@ def printsatats(xmltree, suitename="", setname=""):
     Returns:
 	A string with the information
     """
-    stringbuf = ""
+    stringbuf  = ""
     xpathtotal = ""
-    xpathpass = ""
-    xpathfail = ""
-    xpathna = ""
+    xpathpass  = ""
+    xpathfail  = ""
+    xpathna    = ""
+    xpathblock = ""
 
     if not suitename:
 	xpathtotal = "count(//suite/set/testcase"
@@ -56,14 +57,15 @@ def printsatats(xmltree, suitename="", setname=""):
 	else:
 	    xpathtotal = "count(//suite[@name='" + suitename + "']/set[@name='" + setname + "']/testcase"
 
-    xpathpass = xpathtotal + "[@result='PASS'])"
-    xpathfail = xpathtotal + "[@result='FAIL'])"
-    xpathna = xpathtotal + "[@result='N/A'])"
+    xpathpass  = xpathtotal + "[@result='PASS'])"
+    xpathfail  = xpathtotal + "[@result='FAIL'])"
+    xpathna    = xpathtotal + "[@result='N/A'])"
+    xpathblock = xpathtotal + "[@result='BLOCK'])"
     xpathtotal += ")"
     stringbuf += "\nTotal cases : " + str(int((xmltree.xpath(xpathtotal))))
     stringbuf += "\nPass cases  : " + str(int((xmltree.xpath(xpathpass))))
     stringbuf += "\nFail cases  : " + str(int((xmltree.xpath(xpathfail))))
-    stringbuf += "\nN/A cases   : " + str(int((xmltree.xpath(xpathna))))
+    stringbuf += "\nN/A cases   : " + str(int((xmltree.xpath(xpathna))) + int((xmltree.xpath(xpathblock))))
 
     return stringbuf
 
@@ -120,8 +122,16 @@ def format_result(resultxml, outputdir):
 		filedesc.write('\n\ntest id   : ' + atcase.get('id'))
 		filedesc.write('\nobjective : ' + atcase.get('purpose'))
 		filedesc.write('\nresult    : ' + atcase.get('result'))
-		filedesc.write('\nstdout    : ' + atcase.find('result_info/stdout').text.decode('string_escape'))
-		filedesc.write('stderr    : ' + atcase.find('result_info/stderr').text.decode('string_escape'))
+		stdout = atcase.find('result_info/stdout').text
+		stderr = atcase.find('result_info/stderr').text
+		if stdout is note None:
+			filedesc.write('\nstdout    : ' + atcase.find('result_info/stdout').text.decode('string_escape'))
+		else:
+			filedesc.write('\nstdout    : ')
+		if stderr is not None:
+			filedesc.write('stderr    : ' + atcase.find('result_info/stderr').text.decode('string_escape'))
+		else:
+			filedesc.write('\nstderr    : ')
 
 def main ():
     parser = argparse.ArgumentParser(description='Tool to convert a testkit xml file in a txt format')

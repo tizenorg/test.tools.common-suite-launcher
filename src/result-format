@@ -124,7 +124,7 @@ def format_result(resultxml, outputdir):
 		filedesc.write('\nresult    : ' + atcase.get('result'))
 		stdout = atcase.find('result_info/stdout').text
 		stderr = atcase.find('result_info/stderr').text
-		if stdout is note None:
+		if stdout is not None:
 			filedesc.write('\nstdout    : ' + atcase.find('result_info/stdout').text.decode('string_escape'))
 		else:
 			filedesc.write('\nstdout    : ')
